@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base target="_top">
+  <style>
+    :root { --bg:#fafaf8; --fg:#1d1d1b; --muted:#6b6b66; --line:#dcdcd6; --accent:#2b5fd9; --accent-fg:#fff; --card:#fff; --err:#b3261e; --ok:#1e7a3c; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#161615; --fg:#ececea; --muted:#9a9a94; --line:#33332f; --accent:#7aa2ff; --accent-fg:#0b0b0a; --card:#1f1f1d; --err:#ff8a80; --ok:#7ddc95; }
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 640px; margin: 0 auto; padding: 32px 16px 64px; }
+    h1 { font-size: 1.8rem; margin: 0 0 8px; }
+    h2 { font-size: 1.05rem; margin: 24px 0 4px; }
+    .lede { color: var(--muted); }
+    .hint { color: var(--muted); font-size: .9rem; }
+    form { margin-top: 32px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+    fieldset { border: 0; padding: 0; margin: 0 0 20px; }
+    legend, .label { font-weight: 600; margin-bottom: 6px; display: block; }
+    input[type=text], input[type=email], input[type=tel], input[type=number], textarea {
+      width: 100%; padding: 10px 12px; font: inherit; color: var(--fg); background: var(--bg);
+      border: 1px solid var(--line); border-radius: 8px; }
+    input[type=number] { width: 6em; }
+    label.choice { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; cursor: pointer; }
+    .grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .grid button { padding: 8px 12px; font: inherit; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); cursor: pointer; }
+    .grid button[aria-pressed=true] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+    .grid button:disabled { opacity: .35; cursor: not-allowed; text-decoration: line-through; }
+    .submit { margin-top: 16px; width: 100%; padding: 12px; font: inherit; font-weight: 600; border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-fg); cursor: pointer; }
+    .submit:disabled { opacity: .5; }
+    #msg { min-height: 1.5em; }
+    #msg.err { color: var(--err); }
+    #msg.ok { color: var(--ok); }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+<main>
+  <?!= include('content') ?>
+
+  <form id="f" novalidate>
+    <fieldset>
+      <legend>Where should we meet?</legend>
+      <label class="choice"><input type="radio" name="mode" value="me" checked>
+        <span>You come to me<br><span class="hint">Meet at <strong><?= meetingSpot ?></strong>, then I'll walk you to my apartment for the session.</span></span></label>
+      <label class="choice"><input type="radio" name="mode" value="them">
+        <span>I come to you</span></label>
+      <div id="addressBox" hidden>
+        <input type="text" id="address" placeholder="Your full address, including city" autocomplete="street-address">
+        <p class="hint" id="addressFound"></p>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <label class="label" for="people">How many people?</label>
+      <input type="number" id="people" min="1" step="1" value="1">
+      <span class="hint" id="dur"></span>
+    </fieldset>
+
+    <fieldset>
+      <span class="label">Pick a day</span>
+      <div class="grid" id="days"><span class="hint">Loading…</span></div>
+    </fieldset>
+
+    <fieldset id="slotsBox" hidden>
+      <span class="label">Pick a time</span>
+      <div class="grid" id="slots"></div>
+    </fieldset>
+
+    <div id="details" hidden>
+      <fieldset>
+        <label class="label" for="name">Name</label>
+        <input type="text" id="name" required autocomplete="name">
+      </fieldset>
+      <fieldset>
+        <label class="label" for="email">Email (your calendar invite goes here)</label>
+        <input type="email" id="email" required autocomplete="email">
+      </fieldset>
+      <fieldset>
+        <label class="label" for="phone">Phone <span class="hint">(optional)</span></label>
+        <input type="tel" id="phone" autocomplete="tel">
+      </fieldset>
+      <fieldset>
+        <label class="label" for="notes">Notes or access instructions <span class="hint">(optional)</span></label>
+        <textarea id="notes" rows="3" placeholder="Buzzer code, parking, anything I should know"></textarea>
+      </fieldset>
+      <fieldset id="eligBox"><span class="label">Please confirm</span></fieldset>
+      <button class="submit" id="submit" type="submit">Book session</button>
+    </div>
+
+    <p id="msg" role="status" aria-live="polite"></p>
+  </form>
+</main>
+
+<script>
+  const FIRST = <?= firstMin ?>, EXTRA = <?= extraMin ?>;
+  const $ = id => document.getElementById(id);
+  const state = { day: null, start: null };
+  let reqId = 0;
+
+  const mode = () => document.querySelector('input[name=mode]:checked').value;
+  const people = () => Math.max(1, Math.floor(+$('people').value || 1));
+
+  function call(fn, ...args) {
+    return new Promise((ok, fail) => google.script.run.withSuccessHandler(ok).withFailureHandler(fail)[fn](...args));
+  }
+  function msg(text, cls) { $('msg').textContent = text || ''; $('msg').className = cls || ''; }
+  function errText(e) { return (e && e.message || String(e)).replace(/^Exception:\s*/, ''); }
+
+  function showDuration() {
+    const m = FIRST + EXTRA * (people() - 1);
+    $('dur').textContent = ' ' + (m / 60).toString().replace(/\.5$/, '½') + ' hours total';
+  }
+
+  function resetSlots() {
+    state.start = null;
+    $('slotsBox').hidden = true; $('details').hidden = true; $('slots').innerHTML = '';
+  }
+
+  async function loadDays() {
+    const id = ++reqId;
+    state.day = null; resetSlots();
+    $('days').innerHTML = '<span class="hint">Loading…</span>';
+    try {
+      const days = await call('getDays', people());
+      if (id !== reqId) return;
+      $('days').innerHTML = '';
+      days.forEach(d => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.textContent = d.label; b.disabled = !d.open;
+        b.setAttribute('aria-pressed', 'false');
+        b.onclick = () => pickDay(d.day, b);
+        $('days').append(b);
+      });
+    } catch (e) { msg(errText(e), 'err'); }
+  }
+
+  async function pickDay(day, btn) {
+    if (mode() === 'them' && !$('address').value.trim()) { msg('Enter your address first.', 'err'); $('address').focus(); return; }
+    msg('');
+    state.day = day; resetSlots();
+    document.querySelectorAll('#days button').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+    $('slotsBox').hidden = false;
+    $('slots').innerHTML = '<span class="hint">Checking travel times…</span>';
+    const id = ++reqId;
+    try {
+      const r = await call('getSlots', day, mode(), $('address').value, people());
+      if (id !== reqId) return;
+      $('addressFound').textContent = mode() === 'them' ? 'Using: ' + r.address : '';
+      $('slots').innerHTML = r.slots.length ? '' : '<span class="hint">No times work that day. Try another day or the other meeting option.</span>';
+      r.slots.forEach(s => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.textContent = s.label; b.setAttribute('aria-pressed', 'false');
+        b.onclick = () => {
+          state.start = s.ms;
+          document.querySelectorAll('#slots button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+          $('details').hidden = false; $('name').focus();
+        };
+        $('slots').append(b);
+      });
+    } catch (e) { if (id === reqId) { $('slots').innerHTML = ''; msg(errText(e), 'err'); } }
+  }
+
+  // Build eligibility checkboxes from content.html (<li required> = must be checked)
+  const tpl = document.getElementById('eligibility-items');
+  if (tpl && tpl.content.querySelectorAll('li').length) {
+    tpl.content.querySelectorAll('li').forEach(li => {
+      const l = document.createElement('label'); l.className = 'choice';
+      const c = document.createElement('input'); c.type = 'checkbox'; c.value = li.textContent.trim(); c.required = li.hasAttribute('required');
+      l.append(c, document.createTextNode(li.textContent.trim()));
+      $('eligBox').append(l);
+    });
+  } else { $('eligBox').hidden = true; }
+
+  document.querySelectorAll('input[name=mode]').forEach(r => r.onchange = () => {
+    $('addressBox').hidden = mode() !== 'them';
+    $('addressFound').textContent = '';
+    if (state.day) pickDay(state.day, document.querySelector('#days button[aria-pressed=true]')); else resetSlots();
+  });
+  $('address').onchange = () => { if (state.day) pickDay(state.day, document.querySelector('#days button[aria-pressed=true]')); };
+  $('people').onchange = () => { showDuration(); loadDays(); };
+
+  $('f').onsubmit = async ev => {
+    ev.preventDefault();
+    if (!$('name').value.trim() || !$('email').checkValidity() || !$('email').value) { msg('Please enter your name and a valid email.', 'err'); return; }
+    if (document.querySelector('#eligBox input:required:not(:checked)')) { msg('Please check the required boxes.', 'err'); return; }
+    $('submit').disabled = true; msg('Booking…');
+    try {
+      const r = await call('book', {
+        mode: mode(), address: $('address').value, people: people(), day: state.day, start: state.start,
+        name: $('name').value, email: $('email').value, phone: $('phone').value, notes: $('notes').value,
+        eligibility: [...document.querySelectorAll('#eligBox input:checked')].map(c => c.value),
+      });
+      $('f').innerHTML = '';
+      const p = document.createElement('p'); p.id = 'msg'; p.className = 'ok';
+      p.textContent = `You're booked: ${r.when} at ${r.location}. A calendar invite is on its way to your email.`;
+      $('f').append(p);
+    } catch (e) {
+      $('submit').disabled = false;
+      if (state.day) pickDay(state.day, document.querySelector('#days button[aria-pressed=true]')); // refresh times
+      msg(errText(e), 'err');
+    }
+  };
+
+  showDuration();
+  loadDays();
+</script>
+</body>
+</html>

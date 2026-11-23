@@ -1,0 +1,52 @@
+<!--
+  EDIT THIS FILE to change what the booking page says.
+  Then deploy: clasp push && clasp redeploy <DEPLOYMENT_ID>
+-->
+<header>
+  <h1>Book an EEG session</h1>
+  <p class="lede">
+    I'm collecting EEG (brainwave) recordings for a research study. Sessions are paid.
+    Pick a time below. I can come to you at a location of your choice, or you can come to me.
+
+    Note that if you are picking a location it must be a private room where you can be alone for the duration of the session. 
+    I cannot record in public spaces due to signal quality issues.
+  </p>
+</header>
+
+<section>
+  <h2>What to expect</h2>
+  <p>
+    I fit a headphone with sensors in the earmuffs on your head, set up the equipment, and record while you do some simple tasks.
+    Nothing is painful or invasive.
+  </p>
+</section>
+
+<section>
+  <h2>How long it takes</h2>
+  <p>
+    <strong>90 minutes</strong> for one person, setup included.
+    Each additional person in your household adds <strong>60 minutes</strong>, since the equipment is already set up.
+    For example, 3 people take 3.5 hours. Book as many people as fits your day.
+  </p>
+</section>
+
+<section>
+  <h2>Compensation</h2>
+  <p>$50 per person, paid for in venmo or zelle at the end of the session. If you need another form of compensation, please note
+    it in the section below and I will try to accommodate.
+  </p>
+</section>
+
+<section>
+  <h2>If you come to me</h2>
+  <p>
+    We'll meet at the spot shown below. From there I'll walk you to my apartment, where the session takes place.
+  </p>
+</section>
+
+<!-- Checkboxes in the booking form. One <li> per checkbox. Add `required` to make one mandatory. -->
+<template id="eligibility-items">
+  <li required>I'm 18 or older.</li>
+  <li required>I've read how long the session takes.</li>
+</template>
+
