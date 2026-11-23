@@ -54,7 +54,6 @@
     <fieldset>
       <label class="label" for="people">How many people?</label>
       <input type="number" id="people" min="1" step="1" value="1">
-      <span class="hint" id="dur"></span>
     </fieldset>
 
     <fieldset>
@@ -93,7 +92,6 @@
 </main>
 
 <script>
-  const FIRST = <?= firstMin ?>, EXTRA = <?= extraMin ?>;
   const $ = id => document.getElementById(id);
   const state = { day: null, start: null };
   let reqId = 0;
@@ -107,10 +105,6 @@
   function msg(text, cls) { $('msg').textContent = text || ''; $('msg').className = cls || ''; }
   function errText(e) { return (e && e.message || String(e)).replace(/^Exception:\s*/, ''); }
 
-  function showDuration() {
-    const m = FIRST + EXTRA * (people() - 1);
-    $('dur').textContent = ' ' + (m / 60).toString().replace(/\.5$/, '½') + ' hours total';
-  }
 
   function resetSlots() {
     state.start = null;
@@ -178,7 +172,7 @@
     if (state.day) pickDay(state.day, document.querySelector('#days button[aria-pressed=true]')); else resetSlots();
   });
   $('address').onchange = () => { if (state.day) pickDay(state.day, document.querySelector('#days button[aria-pressed=true]')); };
-  $('people').onchange = () => { showDuration(); loadDays(); };
+  $('people').onchange = loadDays;
 
   $('f').onsubmit = async ev => {
     ev.preventDefault();
@@ -202,7 +196,6 @@
     }
   };
 
-  showDuration();
   loadDays();
 </script>
 </body>

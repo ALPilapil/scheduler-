@@ -16,8 +16,6 @@ const HOUR = 3600000, MIN = 60000;
 function doGet() {
   const t = HtmlService.createTemplateFromFile('Index');
   t.meetingSpot = spot_();
-  t.firstMin = CONFIG.FIRST_PERSON_MIN;
-  t.extraMin = CONFIG.EXTRA_PERSON_MIN;
   return t.evaluate()
     .setTitle('Book an EEG session')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
